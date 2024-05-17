@@ -1,0 +1,66 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4; /* Neutral background color */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Full viewport height */
+}
+
+#gameContainer {
+    width: 300px; /* Fixed size, adjust as needed */
+    position: relative; /* Needed for absolute positioning of children */
+}
+
+.avatar-container {
+    height: 300px; /* Ensure container is square */
+    position: relative;
+    border-radius: 50%;
+    background-color: #ddd; /* Light gray background */
+}
+
+.avatar {
+    position: absolute;
+    width: 40px; /* Avatar size */
+    height: 40px; /* Same as width to maintain aspect ratio */
+    line-height: 40px; /* Align the emoji vertically */
+    text-align: center;
+    font-size: 24px; /* Emoji size */
+    border-radius: 50%; /* Circular avatars */
+    background-color: white; /* Avatar background */
+    top: 50%; /* Center the avatar */
+    left: 50%; /* Center the avatar */
+    transform: translate(-50%, -50%) translate(calc(var(--radius) * cos(var(--index) * 1turn / var(--total-avatars))), calc(var(--radius) * sin(var(--index) * 1turn / var(--total-avatars))));
+    transform-origin: center center;
+}
+
+.input-container {
+    margin-top: 20px; /* Space between avatars and input fields */
+}
+
+input, button {
+    width: 100%; /* Full width within the container */
+    padding: 8px;
+    margin-bottom: 10px; /* Space between fields */
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    background-color: #4CAF50; /* Green background */
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+/* Custom properties for radius and total avatars */
+:root {
+    --radius: 120px; /* Radius of the circle path */
+    --total-avatars: 9; /* Total number of avatars */
+}
