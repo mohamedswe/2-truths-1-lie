@@ -6,40 +6,59 @@ const PORT = 8000;
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+    cors: {
+        origin: "*", // Be careful with this in production
+        methods: ["GET", "POST"]
+    }
+});
 
 app.use(cors());
 app.use(express.json());
 
-const gameSessions = {};
+let gameSessions = {};
 
-app.post('/submit-statements', (req, res) => {
-    const { sessionId, userId, truths, lie } = req.body;
-    if (!gameSessions[sessionId]) {
-        gameSessions[sessionId] = { players: {}, state: 'collecting' };
-    }
-    gameSessions[sessionId].players[userId] = { truths, lie, hasGuessed: false, score: 0 };
-    console.log(`Statements received and saved for user ${userId} in session ${sessionId}`);
-    res.json({ message: 'Statements received and saved' });
+app.post('/create-session', (req, res) => {
+    const sessionId = Date.now().toString();  // Simple unique session ID generator
+    gameSessions[sessionId] = { players: {}, state: 'waiting', sessionId: sessionId };
+    res.json({ message: 'Session created', sessionId: sessionId });
 });
 
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
     socket.on('join_game', ({ sessionId, userId }) => {
-        if (!gameSessions[sessionId]) {
-            gameSessions[sessionId] = { players: {}, state: 'waiting' };
+        if (gameSessions[sessionId]) {
+            if (!gameSessions[sessionId].players[userId]) {
+                gameSessions[sessionId].players[userId] = { truths: [], lie: '', hasGuessed: false, score: 0 };
+                socket.join(sessionId);
+                console.log(`User ${userId} joined game session ${sessionId}`);
+                io.to(sessionId).emit('update_session', gameSessions[sessionId]);
+            }
+        } else {
+            socket.emit('error', 'Session does not exist');
         }
-        if (!gameSessions[sessionId].players[userId]) {
-            gameSessions[sessionId].players[userId] = { truths: [], lie: '', hasGuessed: false, score: 0 };
+    });
+
+    socket.on('submit_statements', ({ sessionId, userId, truths, lie }) => {
+        if (gameSessions[sessionId] && gameSessions[sessionId].players[userId]) {
+            gameSessions[sessionId].players[userId].truths = truths;
+            gameSessions[sessionId].players[userId].lie = lie;
+            console.log(`Statements received and saved for user ${userId} in session ${sessionId}`);
+            socket.to(sessionId).emit('statements_updated', { userId, truths, lie });
         }
-        socket.join(sessionId);
-        console.log(`User ${userId} joined game session ${sessionId}`);
+    });
+
+    socket.on('start_game', ({ sessionId }) => {
+        if (gameSessions[sessionId]) {
+            gameSessions[sessionId].state = 'playing';
+            io.to(sessionId).emit('game_started', gameSessions[sessionId]);
+        }
     });
 
     socket.on('guess', ({ sessionId, userId, guess }) => {
         const session = gameSessions[sessionId];
-        if (session && session.state === 'guessing') {
+        if (session && session.state === 'playing') {
             const players = session.players;
             Object.keys(players).forEach(id => {
                 if (players[id].lie === guess && id !== userId) {
@@ -49,15 +68,14 @@ io.on('connection', (socket) => {
             });
             players[userId].hasGuessed = true;
             if (Object.values(players).every(player => player.hasGuessed)) {
-                session.state = 'end';
-                io.to(sessionId).emit('end_game', players);
+                session.state = 'ended';
+                io.to(sessionId).emit('end_game', { players: session.players });
             }
         }
     });
 
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
-        // Cleanup user from all sessions to avoid memory leaks
         Object.keys(gameSessions).forEach(sessionId => {
             const session = gameSessions[sessionId];
             if (session.players[socket.id]) {
